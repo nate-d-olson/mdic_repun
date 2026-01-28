@@ -1,0 +1,40 @@
+# Nextflow
+.nextflow/**
+.nextflow.log*
+work/**
+results/**
+pipeline_info/**
+*.html
+*.svg
+*.txt
+
+# Data directories
+Repun/**
+CCDC6-RET_WGS_120x-cram/**
+CCDC6-RET_WGS_120x-cram-wtouch/**
+CCDC6-RET_WGS_120x-cram-wtouch-dragref/**
+data/**
+
+# Conda environments
+.conda/**
+conda/**
+envs/**
+
+# Python
+__pycache__/**
+*.pyc
+*.pyo
+.Python
+*.egg-info/
+
+# Editor and IDE
+.vscode/**
+.idea/**
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test outputs
+test_output/**
+tmp/**
