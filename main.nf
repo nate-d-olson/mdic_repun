@@ -110,7 +110,7 @@ process RUN_REPUN {
     path truth_tbi
 
     output:
-    path "repun_output/*", emit: results
+    path "repun_*/*", emit: results
     path ".command.log", emit: log, optional: true
 
     script:
@@ -120,23 +120,28 @@ process RUN_REPUN {
         --max_af_for_somatic_unification ${params.max_af_somatic} \\
         --vaf_threshold_for_pass ${params.vaf_threshold}""" : ""
 
+    def output_subdir = params.somatic_mode
+        ? "repun_sm_af${params.min_af}_maxaf${params.max_af_somatic}_vaf${params.vaf_threshold}"
+        : "repun_germline"
+
     """
-    mkdir -p repun_output
+    mkdir -p ${output_subdir}
 
     echo "Starting Repun for sample: ${sample_id}"
     echo "Platform: ${platform}"
     echo "Somatic mode: ${params.somatic_mode}"
-	
+    echo "Output directory: ${output_subdir}"
+
     python /wrk/mdic_repun/Repun/repun \\
         --bam_fn ${bam} \\
         --ref_fn ${ref} \\
         --truth_vcf_fn ${truth} \\
         --threads ${task.cpus} \\
         --platform ${platform} \\
-        --output_dir repun_output ${somatic_args}
+        --output_dir ${output_subdir} ${somatic_args}
 
     echo "Repun completed for sample: ${sample_id}"
-    ls -lh repun_output/
+    ls -lh ${output_subdir}/
     """
 }
 
