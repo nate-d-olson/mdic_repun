@@ -10,6 +10,11 @@ nextflow.enable.dsl = 2
     unification) on multiple samples with support for BAM/CRAM files from local or S3.
 
     GitHub: https://github.com/HKU-BAL/repun
+
+    AI Use Disclosure:
+    This pipeline utilized Anthropic's Claude Code (Claude Sonnet 4.5) for pipeline
+    development, code generation, and documentation. All code has been reviewed and
+    validated by NIST researchers.
 ----------------------------------------------------------------------------------------
 */
 
