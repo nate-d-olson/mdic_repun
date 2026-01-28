@@ -60,12 +60,6 @@ def helpMessage() {
     """.stripIndent()
 }
 
-// Show help message if requested
-if (params.help) {
-    helpMessage()
-    exit 0
-}
-
 // =============================================================================
 // Parameters
 // =============================================================================
@@ -151,165 +145,18 @@ process RUN_REPUN {
     """
 }
 
-// =============================================================================
-// Process: DOWNLOAD_AND_CONVERT_ALIGNMENT
-// =============================================================================
-
-process DOWNLOAD_AND_CONVERT_ALIGNMENT {
-    tag "${sample_id}"
-    label 'process_medium'
-
-    conda 'bioconda::samtools=1.17'
-
-    publishDir "${params.cache_dir}/s3_downloads",
-        mode: 'copy',
-        overwrite: params.force_download,
-        enabled: params.cache_dir ? true : false
-
-    input:
-    tuple val(sample_id), val(file_path), val(platform), val(output_name)
-    path ref
-    path ref_fai
-
-    output:
-    tuple val(sample_id), path("${output_file_name}"), val(platform), val(output_name)
-
-    script:
-    is_s3 = file_path.startsWith('s3://')
-    is_cram = file_path.endsWith('.cram')
-    base_name = file_path.tokenize('/').last()
-
-    // Output is always .bam (converted from .cram if needed)
-    output_file_name = is_cram ? base_name.replaceAll('\\.cram$', '.bam') : base_name
-
-    if (is_cram) {
-        """
-        set -e
-        echo "[CONVERT] Streaming and converting CRAM to BAM: ${file_path}"
-        echo "Sample: ${sample_id}"
-        echo "Platform: ${platform}"
-
-        samtools version
-
-        # Stream CRAM from S3/local and convert to BAM
-        export AWS_PROFILE=${params.aws_profile}
-
-        samtools view \\
-            -b \\
-            -T ${ref} \\
-            -@ ${task.cpus} \\
-            -o ${output_file_name} \\
-            ${file_path}
-
-        if [[ ! -f "${output_file_name}" ]]; then
-            echo "ERROR: Failed to convert CRAM ${file_path}"
-            exit 1
-        fi
-
-        echo "[CONVERT] Successfully converted to BAM"
-        ls -lh "${output_file_name}"
-        """
-    } else if (is_s3) {
-        """
-        set -e
-        echo "[DOWNLOAD] Downloading BAM from S3: ${file_path}"
-        export AWS_PROFILE=${params.aws_profile}
-
-        aws s3 cp ${file_path} ${output_file_name}
-
-        if [[ ! -f "${output_file_name}" ]]; then
-            echo "ERROR: Failed to download ${file_path}"
-            exit 1
-        fi
-
-        echo "[DOWNLOAD] Successfully downloaded BAM"
-        ls -lh "${output_file_name}"
-        """
-    } else {
-        """
-        echo "[LOCAL] Using local file: ${file_path}"
-        ln -s ${file_path} ${output_file_name}
-        ls -lh "${output_file_name}"
-        """
-    }
-}
-
-// =============================================================================
-// Process: HANDLE_INDEX
-// =============================================================================
-
-process HANDLE_INDEX {
-    tag "${sample_id}"
-    label 'process_low'
-
-    conda 'bioconda::samtools=1.17'
-
-    publishDir "${params.cache_dir}/s3_downloads",
-        mode: 'copy',
-        overwrite: params.force_download,
-        enabled: params.cache_dir ? true : false
-
-    input:
-    tuple val(sample_id), val(index_path), val(platform), val(output_name)
-    tuple val(sample_id), path(bam_file), val(bam_platform), val(bam_output_name)
-
-    output:
-    tuple val(sample_id), path("${output_file_name}"), val(platform), val(output_name)
-
-    script:
-    is_s3 = index_path.startsWith('s3://')
-    is_crai = index_path.endsWith('.crai')
-    base_name = index_path.tokenize('/').last()
-
-    // Output is always .bai (generated from BAM if source was .crai)
-    output_file_name = is_crai ? base_name.replaceAll('\\.crai$', '.bai') : base_name
-
-    if (is_crai) {
-        """
-        set -e
-        echo "[INDEX] Generating BAI index from converted BAM: ${bam_file}"
-        echo "Sample: ${sample_id}"
-
-        samtools index -@ ${task.cpus} ${bam_file} ${output_file_name}
-
-        if [[ ! -f "${output_file_name}" ]]; then
-            echo "ERROR: Failed to generate index for ${bam_file}"
-            exit 1
-        fi
-
-        echo "[INDEX] Successfully created BAI index"
-        ls -lh "${output_file_name}"
-        """
-    } else if (is_s3) {
-        """
-        set -e
-        echo "[DOWNLOAD] Downloading index from S3: ${index_path}"
-        export AWS_PROFILE=${params.aws_profile}
-
-        aws s3 cp ${index_path} ${output_file_name}
-
-        if [[ ! -f "${output_file_name}" ]]; then
-            echo "ERROR: Failed to download ${index_path}"
-            exit 1
-        fi
-
-        echo "[DOWNLOAD] Successfully downloaded index"
-        ls -lh "${output_file_name}"
-        """
-    } else {
-        """
-        echo "[LOCAL] Using local index: ${index_path}"
-        ln -s ${index_path} ${output_file_name}
-        ls -lh "${output_file_name}"
-        """
-    }
-}
 
 // =============================================================================
 // Workflow
 // =============================================================================
 
 workflow {
+
+    // Show help message if requested
+    if (params.help) {
+        helpMessage()
+        exit 0
+    }
 
     // Print pipeline header
     log.info """\
@@ -344,7 +191,7 @@ workflow {
 
 
     // Parse samplesheet and separate alignment files from index files
-    Channel
+    channel
         .fromPath(params.input, checkIfExists: true)
         .splitCsv(header: true)
         .map { row ->
@@ -358,44 +205,6 @@ workflow {
         }
         .set { samples_raw_ch }
 
-    // Create separate channels for alignment and index files
-    alignment_files_ch = samples_raw_ch.map { sample_id, bam_path, bai_path, platform, output_name ->
-        tuple(sample_id, bam_path, platform, output_name)
-    }
-
-    index_files_ch = samples_raw_ch.map { sample_id, bam_path, bai_path, platform, output_name ->
-        tuple(sample_id, bai_path, platform, output_name)
-    }
-
-    // Download/convert alignment files (BAM or CRAM → BAM)
-    // DOWNLOAD_AND_CONVERT_ALIGNMENT(
-    //     alignment_files_ch,
-    //     ref_file,
-    //     ref_fai_file
-    // )
-
-    // Handle index files (download .bai or generate from converted BAM if source was .crai)
-    // Join with alignment files so we have the BAM available for indexing
-    // index_files_ch
-    //     .join(DOWNLOAD_AND_CONVERT_ALIGNMENT.out, by: 0)  // Join by sample_id
-    //     .multiMap { sample_id, idx_path, idx_platform, idx_output, bam_file, bam_platform, bam_output ->
-    //         index_input: tuple(sample_id, idx_path, idx_platform, idx_output)
-    //         bam_input: tuple(sample_id, bam_file, bam_platform, bam_output)
-    //     }
-    //     .set { index_inputs }
-
-    // HANDLE_INDEX(
-    //     index_inputs.index_input,
-    //     index_inputs.bam_input
-    // )
-
-    // // Combine alignment and index files for RUN_REPUN
-    // DOWNLOAD_AND_CONVERT_ALIGNMENT.out
-    //     .join(HANDLE_INDEX.out, by: 0)  // Join by sample_id
-    //     .map { sample_id, bam_file, bam_platform, bam_output, bai_file, bai_platform, bai_output ->
-    //         tuple(sample_id, bam_file, bai_file, bam_platform, bam_output)
-    //     }
-    //     .set { samples_prepared_ch }
 
     // Run repun on each sample
     RUN_REPUN(

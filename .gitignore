@@ -14,6 +14,7 @@ CCDC6-RET_WGS_120x-cram/**
 CCDC6-RET_WGS_120x-cram-wtouch/**
 CCDC6-RET_WGS_120x-cram-wtouch-dragref/**
 data/**
+CCDC6-RET_WGS_120x-cram-mamba/**
 
 # Conda environments
 .conda/**
