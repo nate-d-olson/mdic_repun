@@ -34,13 +34,11 @@ def helpMessage() {
 
     Optional Arguments:
         --outdir <path>      Output directory (default: results)
-        --cache_dir <path>   S3 file cache directory (default: \${outdir}/s3_cache)
-        --force_download     Force re-download of S3 files (default: false)
 
     Repun Options:
         --somatic_mode       Enable somatic mode (default: true)
         --min_af <float>     Minimum allele frequency (default: 0.01)
-        --max_af_somatic <float>  Max AF for somatic unification (default: 0.25)
+        --max_af_somatic <float>  Max AF for somatic unification (default: 0.01)
         --vaf_threshold <float>   VAF threshold for PASS (default: 0.01)
 
     AWS Options:
@@ -77,14 +75,10 @@ params.truth  = null   // Local path to truth VCF
 // Output configuration
 params.outdir = 'results'
 
-// S3 file caching configuration
-params.cache_dir = "${params.outdir}/s3_cache"
-params.force_download = false  // Set to true to force re-download
-
 // Repun somatic mode parameters
 params.somatic_mode = true
 params.min_af = 0.01
-params.max_af_somatic = 0.25
+params.max_af_somatic = 0.01
 params.vaf_threshold = 0.01
 
 // AWS configuration
@@ -113,6 +107,7 @@ process RUN_REPUN {
     path ref
     path ref_fai
     path truth
+    path truth_tbi
 
     output:
     path "repun_output/*", emit: results
@@ -131,11 +126,6 @@ process RUN_REPUN {
     echo "Starting Repun for sample: ${sample_id}"
     echo "Platform: ${platform}"
     echo "Somatic mode: ${params.somatic_mode}"
-
-	vmtouch -dl ${bai} ${ref} ${ref_fai}
-	
-	export REF_PATH=/resources/ref_cache/%2s/%2s/%s
-	export REF_CACHE=/resources/ref_cache/%2s/%2s/%s
 	
     python /wrk/mdic_repun/Repun/repun \\
         --bam_fn ${bam} \\
@@ -172,7 +162,6 @@ workflow {
     Reference FASTA   : ${params.ref}
     Truth VCF         : ${params.truth}
     Output directory  : ${params.outdir}
-    Cache directory   : ${params.cache_dir}
     Somatic mode      : ${params.somatic_mode}
     AWS profile       : ${params.aws_profile}
     ============================================
@@ -193,6 +182,7 @@ workflow {
     ref_file     = file(params.ref, checkIfExists: true)
     ref_fai_file = file("${params.ref}.fai", checkIfExists: true)
     truth_file   = file(params.truth, checkIfExists: true)
+    truth_tbi_file = file("${params.truth}.tbi", checkIfExists: true)
 
 
     // Parse samplesheet and separate alignment files from index files
@@ -216,6 +206,7 @@ workflow {
         samples_raw_ch,
         ref_file,
         ref_fai_file,
-        truth_file
+        truth_file,
+        truth_tbi_file
     )
 }
