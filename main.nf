@@ -64,30 +64,6 @@ def helpMessage() {
 }
 
 // =============================================================================
-// Parameters
-// =============================================================================
-
-// Required inputs
-params.input  = null   // Path to samplesheet CSV
-params.ref    = null   // Local path to reference FASTA
-params.truth  = null   // Local path to truth VCF
-
-// Output configuration
-params.outdir = 'results'
-
-// Repun somatic mode parameters
-params.somatic_mode = true
-params.min_af = 0.01
-params.max_af_somatic = 0.01
-params.vaf_threshold = 0.01
-
-// AWS configuration
-params.aws_profile = 'mdic'
-
-// Help parameter
-params.help = false
-
-// =============================================================================
 // Process: RUN_REPUN
 // =============================================================================
 
