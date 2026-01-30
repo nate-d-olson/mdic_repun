@@ -1,0 +1,4 @@
+sample_id,s3_bam_path,s3_bai_path,platform,output_subdir_name
+broad_pacbio_40x,s3://my-bucket/wgs/broad_pacbio_40x.bam,s3://my-bucket/wgs/broad_pacbio_40x.bam.bai,pacbio,broad_pacbio_40x_wgs
+broad_ilmn_120x,s3://my-bucket/wgs/broad_ilmn_120x.bam,s3://my-bucket/wgs/broad_ilmn_120x.bam.bai,ilmn,broad_ilmn_120x_wgs
+ffpe_rna_sample,s3://my-bucket/rna/ffpe_rna.bam,s3://my-bucket/rna/ffpe_rna.bam.bai,ilmn,ffpe_rna_illumina

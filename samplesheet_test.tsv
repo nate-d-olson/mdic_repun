@@ -1,0 +1,2 @@
+sample_id,s3_bam_path,s3_bai_path,platform,output_subdir_name
+ERBB2-V659E_HIFI-WGS-40x_broad-B1,s3://srs-hg002-seq/main-broad-082025/analysis/long-read/pacbio-somatic-healthomics/3978059/out/tumor_bams_hiphase/0/m84060_250728_212112_s4_m84143_250808_224910_s2.hifi_reads.bc2046.aligned.hiphase.bam,s3://srs-hg002-seq/main-broad-082025/analysis/long-read/pacbio-somatic-healthomics/3978059/out/tumor_bams_hiphase/0/m84060_250728_212112_s4_m84143_250808_224910_s2.hifi_reads.bc2046.aligned.hiphase.bam.bai,hifi,ERBB2-V659E_broad_pacbio_40x_wgs
