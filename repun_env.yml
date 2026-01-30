@@ -1,20 +1,16 @@
 name: repun
 channels:
-  - bioconda
   - conda-forge
-  - defaults
+  - bioconda
 dependencies:
   - python=3.9
-  - biopython=1.85
+  - pypy3.6
   - htslib=1.17
   - samtools=1.15.1
-  - pysam=0.21.0
-  - pyfaidx=0.9.0
-  - pyvcf3=1.0.4
-  - whatshap=1.7
   - numpy=2.0
   - scipy=1.13
   - networkx=3.2
   - parallel=20191122
   - pigz=2.8
   - xopen=2.0
+  - packaging

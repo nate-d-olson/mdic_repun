@@ -145,7 +145,7 @@ process RUN_REPUN {
     echo "Somatic mode: ${params.somatic_mode}"
     echo "Output directory: ${output_subdir}"
 
-    Repun/repun \\
+    python ${projectDir}/bin/Repun/repun \\
         --bam_fn ${bam} \\
         --ref_fn ${ref} \\
         --truth_vcf_fn ${truth} \\
