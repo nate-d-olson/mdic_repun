@@ -42,7 +42,7 @@ def helpMessage() {
         --min_af <float>     Minimum allele frequency (default: 0.01)
         --max_af_somatic <float>  Max AF for somatic unification (default: 0.01)
         --vaf_threshold <float>   VAF threshold for PASS (default: 0.01)
-        --chunck_size <int>		Size of chunks to split contigs into for parallelization
+        --chunk_size <int>		Size of chunks to split contigs into for parallelization
 
     AWS Options:
         --aws_profile <str>  AWS profile name (default: mdic)
@@ -145,7 +145,7 @@ process RUN_REPUN {
     echo "Somatic mode: ${params.somatic_mode}"
     echo "Output directory: ${output_subdir}"
 
-    python /wrk/mdic_repun/Repun/repun \\
+    Repun/repun \\
         --bam_fn ${bam} \\
         --ref_fn ${ref} \\
         --truth_vcf_fn ${truth} \\
