@@ -112,7 +112,7 @@ process RUN_REPUN {
         saveAs: { filename -> filename.equals('.command.log') ? null : filename }
 
     // container 'hkubal/repun:latest'
-    conda '/home/nolson/miniforge/envs/run'
+    conda "${projectDir}/repun_env.yml"
 
     input:
     tuple val(sample_id), path(bam), path(bai), val(platform), val(output_name)
