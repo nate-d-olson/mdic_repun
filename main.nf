@@ -34,12 +34,15 @@ def helpMessage() {
 
     Optional Arguments:
         --outdir <path>      Output directory (default: results)
+        --local_data_dir <path>  Local directory to check for cached files (default: data)
+                                 Set to 'false' to disable local file detection
 
     Repun Options:
         --somatic_mode       Enable somatic mode (default: true)
         --min_af <float>     Minimum allele frequency (default: 0.01)
         --max_af_somatic <float>  Max AF for somatic unification (default: 0.01)
         --vaf_threshold <float>   VAF threshold for PASS (default: 0.01)
+        --chunck_size <int>		Size of chunks to split contigs into for parallelization
 
     AWS Options:
         --aws_profile <str>  AWS profile name (default: mdic)
@@ -59,8 +62,41 @@ def helpMessage() {
         # Disable somatic mode
         nextflow run main.nf --input samples.csv --ref ref.fa --truth truth.vcf --somatic_mode false
 
+        # Force S3 download (ignore local files)
+        nextflow run main.nf --input samples.csv --ref ref.fa --truth truth.vcf --local_data_dir false
+
     For more information, visit: https://github.com/HKU-BAL/repun
     """.stripIndent()
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Resolve file path: check if local version exists, otherwise use remote path.
+ * Searches for file by basename in the local data directory.
+ *
+ * @param remote_path The S3 or remote file path from samplesheet
+ * @param local_dir   The local directory to search for cached files
+ * @return The local path if file exists locally, otherwise the original remote path
+ */
+def resolveFilePath(remote_path, local_dir) {
+    if (!local_dir || local_dir == 'false' || local_dir == false) {
+        return remote_path
+    }
+
+    def basename = file(remote_path).getName()
+    def local_path = "${local_dir}/${basename}"
+    def local_file = file(local_path)
+
+    if (local_file.exists()) {
+        log.info "  Using local file: ${local_path}"
+        return local_path
+    } else {
+        log.info "  Using remote file: ${remote_path}"
+        return remote_path
+    }
 }
 
 // =============================================================================
@@ -94,7 +130,8 @@ process RUN_REPUN {
         --somatic_mode \\
         --min_af ${params.min_af} \\
         --max_af_for_somatic_unification ${params.max_af_somatic} \\
-        --vaf_threshold_for_pass ${params.vaf_threshold}""" : ""
+        --vaf_threshold_for_pass ${params.vaf_threshold} \\
+        --chunk_size ${params.chunk_size}""" : ""
 
     def output_subdir = params.somatic_mode
         ? "repun_sm_af${params.min_af}_maxaf${params.max_af_somatic}_vaf${params.vaf_threshold}"
@@ -114,7 +151,9 @@ process RUN_REPUN {
         --truth_vcf_fn ${truth} \\
         --threads ${task.cpus} \\
         --platform ${platform} \\
-        --output_dir ${output_subdir} ${somatic_args}
+        --output_dir ${output_subdir} \\
+        --sample_name ${sample_id} \\
+        ${somatic_args}
 
     echo "Repun completed for sample: ${sample_id}"
     ls -lh ${output_subdir}/
@@ -143,6 +182,7 @@ workflow {
     Reference FASTA   : ${params.ref}
     Truth VCF         : ${params.truth}
     Output directory  : ${params.outdir}
+    Local data dir    : ${params.local_data_dir ?: 'disabled'}
     Somatic mode      : ${params.somatic_mode}
     AWS profile       : ${params.aws_profile}
     ============================================
@@ -166,16 +206,28 @@ workflow {
     truth_tbi_file = file("${params.truth}.tbi", checkIfExists: true)
 
 
-    // Parse samplesheet and separate alignment files from index files
+    // Resolve local data directory path
+    def local_data_dir = params.local_data_dir
+    if (local_data_dir && local_data_dir != 'false' && local_data_dir != false) {
+        def local_dir_file = file(local_data_dir)
+        if (!local_dir_file.exists()) {
+            log.warn "Local data directory does not exist: ${local_data_dir} - will use remote paths"
+            local_data_dir = false
+        } else {
+            log.info "Checking for local files in: ${local_data_dir}"
+        }
+    }
+
+    // Parse samplesheet and check for local file versions
     channel
         .fromPath(params.input, checkIfExists: true)
         .splitCsv(header: true)
         .map { row ->
-            def sample_id   = row.sample_id
-            def bam_path    = row.s3_bam_path
-            def bai_path    = row.s3_bai_path
-            def platform    = row.platform
-            def output_name = row.output_subdir_name
+            def sample_id   = row.sample_id.trim()
+            def bam_path    = resolveFilePath(row.s3_bam_path.trim(), local_data_dir)
+            def bai_path    = resolveFilePath(row.s3_bai_path.trim(), local_data_dir)
+            def platform    = row.platform.trim()
+            def output_name = row.output_subdir_name.trim()
 
             tuple(sample_id, bam_path, bai_path, platform, output_name)
         }
