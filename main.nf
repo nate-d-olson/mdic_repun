@@ -105,7 +105,7 @@ def resolveFilePath(remote_path, local_dir) {
 
 process RUN_REPUN {
     tag "${sample_id}"
-    label 'process_high'
+    label 'process_repun'
 
     publishDir "${params.outdir}/${output_name}",
         mode: 'copy',
@@ -152,8 +152,7 @@ process RUN_REPUN {
         --threads ${task.cpus} \\
         --platform ${platform} \\
         --output_dir ${output_subdir} \\
-        --sample_name ${sample_id} \\
-        ${somatic_args}
+        --sample_name ${sample_id} ${somatic_args}
 
     echo "Repun completed for sample: ${sample_id}"
     ls -lh ${output_subdir}/
