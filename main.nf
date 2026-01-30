@@ -83,7 +83,7 @@ def helpMessage() {
  */
 def resolveFilePath(remote_path, local_dir) {
     if (!local_dir || local_dir == 'false' || local_dir == false) {
-        return remote_path
+        return file(remote_path)
     }
 
     def basename = file(remote_path).getName()
@@ -92,10 +92,10 @@ def resolveFilePath(remote_path, local_dir) {
 
     if (local_file.exists()) {
         log.info "  Using local file: ${local_path}"
-        return local_path
+        return local_file
     } else {
         log.info "  Using remote file: ${remote_path}"
-        return remote_path
+        return file(remote_path)
     }
 }
 
