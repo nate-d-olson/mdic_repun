@@ -6,7 +6,7 @@ A Nextflow DSL2 pipeline for running [Repun](https://github.com/HKU-BAL/repun) (
 
 - **Multi-sample processing** via `samplesheet.csv`
 - **S3 and local file support** for BAM/CRAM inputs
-- **Intelligent file caching** to avoid redundant downloads
+- **Intelligent file caching** with local data directory detection
 - **Configurable somatic mode** with tunable parameters
 - **Multiple execution profiles** for different compute environments
 - **Comprehensive reporting** with timeline, trace, and DAG visualization
@@ -14,7 +14,8 @@ A Nextflow DSL2 pipeline for running [Repun](https://github.com/HKU-BAL/repun) (
 ## Requirements
 
 - Nextflow >= 21.04
-- Docker (recommended) or Conda/Mamba
+- Conda/Mamba (currently configured for development)
+- Docker (available but currently disabled)
 - AWS CLI configured (for S3 access)
 
 ## Quick Start
@@ -24,47 +25,47 @@ A Nextflow DSL2 pipeline for running [Repun](https://github.com/HKU-BAL/repun) (
 nextflow run main.nf \
     --input samplesheet.csv \
     --ref /path/to/reference.fasta \
-    --truth /path/to/truth.vcf
+    --truth /path/to/truth.vcf.gz
 
 # With specific profile
 nextflow run main.nf -profile local \
     --input samplesheet.csv \
     --ref /path/to/reference.fasta \
-    --truth /path/to/truth.vcf
+    --truth /path/to/truth.vcf.gz
 
 # Resume failed run
 nextflow run main.nf -resume \
     --input samplesheet.csv \
     --ref /path/to/reference.fasta \
-    --truth /path/to/truth.vcf
+    --truth /path/to/truth.vcf.gz
 ```
 
 ## Parameters
 
 ### Required Arguments
 
-| Parameter | Description                                     |
-| --------- | ----------------------------------------------- |
-| `--input` | Path to samplesheet CSV file                    |
-| `--ref`   | Local path to reference FASTA (with .fai index) |
-| `--truth` | Local path to truth VCF file                    |
+| Parameter | Description                                                   |
+| --------- | ------------------------------------------------------------- |
+| `--input` | Path to samplesheet CSV file                                  |
+| `--ref`   | Local path to reference FASTA (with .fai index)               |
+| `--truth` | Local path to truth VCF file (bgzipped with .tbi index)       |
 
 ### Optional Arguments
 
-| Parameter          | Default              | Description                   |
-| ------------------ | -------------------- | ----------------------------- |
-| `--outdir`         | `results`            | Output directory              |
-| `--cache_dir`      | `${outdir}/s3_cache` | S3 file cache directory       |
-| `--force_download` | `false`              | Force re-download of S3 files |
+| Parameter          | Default   | Description                                                        |
+| ------------------ | --------- | ------------------------------------------------------------------ |
+| `--outdir`         | `results` | Output directory                                                   |
+| `--local_data_dir` | `data`    | Local directory to check for cached files; set to `false` to disable |
 
 ### Repun Configuration
 
 | Parameter          | Default | Description                                  |
 | ------------------ | ------- | -------------------------------------------- |
 | `--somatic_mode`   | `true`  | Enable somatic variant mode                  |
-| `--min_af`         | `0.01`  | Minimum allele frequency                     |
-| `--max_af_somatic` | `0.25`  | Max allele frequency for somatic unification |
+| `--min_af`         | `0.01`  | Minimum allele frequency threshold           |
+| `--max_af_somatic` | `0.08`  | Max allele frequency for somatic unification |
 | `--vaf_threshold`  | `0.01`  | VAF threshold for PASS variants              |
+| `--chunk_size`     | `50000000` | Size of chunks (bp) to split contigs for parallelization |
 
 ### AWS Configuration
 
@@ -73,7 +74,7 @@ nextflow run main.nf -resume \
 | `--aws_profile` | `mdic`  | AWS profile name for S3 access |
 
 Sample sheets included in this repo are specifically for the MDIC SRS project.
-These files are not public and provided for transparency, not intended for use 
+These files are not public and are provided for transparency, not intended for use
 outside of the NIST-MDIC SRS bioinformatics team.
 
 ## Samplesheet Format
@@ -83,55 +84,55 @@ Create a CSV file with the following columns:
 ```csv
 sample_id,s3_bam_path,s3_bai_path,platform,output_subdir_name
 HG002_ilmn,s3://bucket/HG002.bam,s3://bucket/HG002.bam.bai,ilmn,HG002_illumina_wgs
-HG002_pacbio,s3://bucket/HG002.cram,s3://bucket/HG002.cram.crai,pacbio,HG002_pacbio_hifi
+HG002_pacbio,s3://bucket/HG002.cram,s3://bucket/HG002.cram.crai,hifi,HG002_pacbio_hifi
 HG003_ont,/data/HG003.bam,/data/HG003.bam.bai,ont,HG003_nanopore_wgs
 ```
 
-| Column               | Description                                     |
-| -------------------- | ----------------------------------------------- |
-| `sample_id`          | Sample identifier passed to Repun               |
-| `s3_bam_path`        | S3 URI or local path to BAM/CRAM file           |
-| `s3_bai_path`        | S3 URI or local path to index (.bai or .crai)   |
-| `platform`           | Sequencing platform: `ilmn`, `pacbio`, or `ont` |
-| `output_subdir_name` | Subdirectory name for outputs under `results/`  |
+| Column               | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| `sample_id`          | Sample identifier passed to Repun                         |
+| `s3_bam_path`        | S3 URI or local path to BAM/CRAM file                     |
+| `s3_bai_path`        | S3 URI or local path to index (.bai or .crai)             |
+| `platform`           | Sequencing platform: `ilmn`, `hifi`, or `ont`   |
+| `output_subdir_name` | Subdirectory name for outputs under `results/`            |
 
 ## Output Structure
 
-Results are organized by sample under the output directory:
+Results are organized by sample under the output directory. The output subdirectory naming pattern includes the somatic mode parameters used:
 
 ```txt
 results/
-├── HG002_illumina_wgs/
-│   └── repun_output/
-│       ├── unified.vcf.gz              # Germline mode output
-│       ├── output_truth.vcf.gz         # Somatic mode (truth coordinates)
-│       └── output_candidate.vcf.gz     # Somatic mode (candidate coordinates)
-├── HG002_pacbio_hifi/
-│   └── repun_output/
-│       └── ...
+├── <sample_name>/
+│   └── repun_sm_af<min_af>_maxaf<max_af_somatic>_vaf<vaf_threshold>/
+│       ├── unified_truths.vcf.gz           # Somatic mode: truth coordinates
+│       ├── unified_truths.vcf.gz.tbi       # Index
+│       ├── unified_candidates.vcf.gz       # Somatic mode: candidate coordinates
+│       ├── unified_candidates.vcf.gz.tbi   # Index
+│       ├── ru.log                          # Repun execution log
+│       ├── logs/                           # Step-wise logs
+│       └── tmp/                            # Intermediate files
 ├── pipeline_info/
-│   ├── execution_timeline.html         # Execution timeline
-│   ├── execution_report.html           # Resource usage report
-│   ├── execution_trace.txt             # Detailed trace file
-│   └── pipeline_dag.svg                # Pipeline DAG visualization
-└── s3_cache/                           # Cached S3 downloads
-    └── s3_downloads/
-        ├── sample1.bam
-        └── sample1.bam.bai
+│   ├── execution_timeline.html             # Execution timeline
+│   ├── execution_report.html               # Resource usage report
+│   ├── execution_trace.txt                 # Detailed trace file
+│   └── pipeline_dag.svg                    # Pipeline DAG visualization
 ```
+
+For germline mode (`--somatic_mode false`), the output directory is named `repun_germline/` and contains `unified.vcf.gz`.
 
 ## Execution Profiles
 
 The pipeline includes several pre-configured profiles for different compute environments:
 
-| Profile              | CPUs | Memory | Use Case                             |
-| -------------------- | ---- | ------ | ------------------------------------ |
-| `standard` (default) | 4    | 32 GB  | Default production runs              |
-| `local`              | 24   | 386 GB | High-resource local machine          |
-| `high_mem`           | 22   | 128 GB | Memory-intensive samples             |
-| `test`               | 2    | 6 GB   | Quick testing with minimal resources |
-| `debug`              | -    | -      | Debug mode with cleanup disabled     |
-| `conda`              | -    | -      | Use Conda instead of Docker          |
+| Profile              | CPUs | Memory  | Use Case                             |
+| -------------------- | ---- | ------- | ------------------------------------ |
+| `standard` (default) | 4    | 32 GB   | Default production runs              |
+| `local`              | 24   | 350 GB  | High-resource local machine          |
+| `test`               | 2    | 6 GB    | Quick testing with minimal resources |
+| `debug`              | -    | -       | Debug mode with cleanup disabled     |
+| `conda`              | -    | -       | Use Conda instead of Docker          |
+
+The `process_repun` label applies additional resources (12 CPUs, 128 GB memory) for the RUN_REPUN process.
 
 ### Using Profiles
 
@@ -140,19 +141,19 @@ The pipeline includes several pre-configured profiles for different compute envi
 nextflow run main.nf -profile local \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf
+    --truth truth.vcf.gz
 
-# Memory-intensive samples
-nextflow run main.nf -profile high_mem \
-    --input samplesheet.csv \
-    --ref ref.fa \
-    --truth truth.vcf
-
-# Debug mode
+# Debug mode (preserves work directories)
 nextflow run main.nf -profile debug \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf
+    --truth truth.vcf.gz
+
+# Test with minimal resources
+nextflow run main.nf -profile test \
+    --input samplesheet.csv \
+    --ref ref.fa \
+    --truth truth.vcf.gz
 ```
 
 ## Advanced Usage
@@ -163,7 +164,7 @@ nextflow run main.nf -profile debug \
 nextflow run main.nf \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf \
+    --truth truth.vcf.gz \
     --somatic_mode false
 ```
 
@@ -173,10 +174,10 @@ nextflow run main.nf \
 nextflow run main.nf \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf \
+    --truth truth.vcf.gz \
     --somatic_mode true \
     --min_af 0.05 \
-    --max_af_somatic 0.3 \
+    --max_af_somatic 0.15 \
     --vaf_threshold 0.05
 ```
 
@@ -186,10 +187,22 @@ nextflow run main.nf \
 nextflow run main.nf \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf \
+    --truth truth.vcf.gz \
     --max_cpus 32 \
     --max_memory '512.GB' \
     --max_time '48.h'
+```
+
+### Disable Local File Detection
+
+By default, the pipeline checks the `data/` directory for local copies of files before downloading from S3. To disable this:
+
+```bash
+nextflow run main.nf \
+    --input samplesheet.csv \
+    --ref ref.fa \
+    --truth truth.vcf.gz \
+    --local_data_dir false
 ```
 
 ### Use Custom AWS Profile
@@ -198,7 +211,7 @@ nextflow run main.nf \
 nextflow run main.nf \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf \
+    --truth truth.vcf.gz \
     --aws_profile my_custom_profile
 ```
 
@@ -212,7 +225,7 @@ Nextflow caches completed tasks. Resume a failed run with:
 nextflow run main.nf -resume \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf
+    --truth truth.vcf.gz
 ```
 
 ### View Help Message
@@ -246,7 +259,7 @@ Run in debug mode to preserve work directories:
 nextflow run main.nf -profile debug \
     --input samplesheet.csv \
     --ref ref.fa \
-    --truth truth.vcf
+    --truth truth.vcf.gz
 ```
 
 ## Citation
@@ -263,7 +276,7 @@ If you use this pipeline, please cite:
 
 ## AI Use Disclosure
 
-This pipeline was developed with assistance from Anthropic's Claude Code (Claude Sonnet 4.5) for pipeline development, code generation, optimization, and documentation. All AI-generated code has been manually tested and validated by NIST researchers. No restricted access data was provided to external AI services during development.
+This pipeline was developed with assistance from Anthropic's Claude Code (Claude Sonnet 4.5 and Claude Opus 4.5) for pipeline development, code generation, optimization, and documentation. All AI-generated code has been manually tested and validated by NIST researchers. No restricted access data was provided to external AI services during development.
 
 ## License
 
