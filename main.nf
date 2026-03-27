@@ -42,6 +42,7 @@ def helpMessage() {
         --min_af <float>     Minimum allele frequency (default: 0.01)
         --max_af_somatic <float>  Max AF for somatic unification (default: 0.01)
         --vaf_threshold <float>   VAF threshold for PASS (default: 0.01)
+	--min_coverage <int>	Minimum coverage for calculate VAF (default: 5)
         --chunk_size <int>		Size of chunks to split contigs into for parallelization
 
     AWS Options:
@@ -131,6 +132,7 @@ process RUN_REPUN {
         --min_af ${params.min_af} \\
         --max_af_for_somatic_unification ${params.max_af_somatic} \\
         --vaf_threshold_for_pass ${params.vaf_threshold} \\
+	--min_coverage ${params.min_coverage} \\
         --chunk_size ${params.chunk_size}""" : ""
 
     def output_subdir = params.somatic_mode
